@@ -5,12 +5,12 @@ startCommand:
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
-    required:
-      - tiingoApiKey
-    properties:
-      tiingoApiKey:
-        type: string
-        description: The API key for the Tiingo API.
+    # required:
+    #   - tiingoApiKey
+    # properties:
+    #   tiingoApiKey:
+    #     type: string
+    #     description: The API key for the Tiingo API.
   commandFunction:
     # A function that produces the CLI command to start the MCP on stdio.
     |-

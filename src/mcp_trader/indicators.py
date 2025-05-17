@@ -43,15 +43,16 @@ class TechnicalAnalysis:
             raise ValueError("DataFrame is empty. Ensure it contains valid data.")
 
         latest = df.iloc[-1]
+
+ 
         return {
-            "above_20sma": latest["close"] > latest["sma_20"],
-            "above_50sma": latest["close"] > latest["sma_50"],
-            "above_200sma": latest["close"] > latest["sma_200"],
-            "20_50_bullish": latest["sma_20"] > latest["sma_50"],
-            "50_200_bullish": latest["sma_50"] > latest["sma_200"],
-            "rsi": latest["rsi"],
-            "macd_bullish": latest.get("MACD_12_26_9", 0)
-            > latest.get("MACDs_12_26_9", 0),
+            "above_20sma": latest["close"] > (latest["sma_20"] if latest["sma_20"] is not None else 0),
+            "above_50sma": latest["close"] > (latest["sma_50"] if latest["sma_50"] is not None else 0),
+            "above_200sma": latest["close"] > (latest["sma_200"] if latest["sma_200"] is not None else 0),
+            "20_50_bullish": (latest["sma_20"] if latest["sma_20"] is not None else 0) > (latest["sma_50"] if latest["sma_50"] is not None else 0),
+            "50_200_bullish": (latest["sma_50"] if latest["sma_50"] is not None else 0) > (latest["sma_200"] if latest["sma_200"] is not None else 0),
+            "rsi": latest["rsi"] if latest["rsi"] is not None else 0,
+            "macd_bullish": (latest.get("MACD_12_26_9", 0) or 0) > (latest.get("MACDs_12_26_9", 0) or 0),
         }
 
 

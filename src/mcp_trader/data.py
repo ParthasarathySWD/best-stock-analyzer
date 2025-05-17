@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import pandas as pd
+import requests
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -41,14 +42,22 @@ class MarketData:
             f'startDate={start_date.strftime("%Y-%m-%d")}&'
             f'endDate={end_date.strftime("%Y-%m-%d")}'
         )
-
+        url = f"https://api.tiingo.com/tiingo/daily/{symbol}/prices?startDate=2025-05-12&token=0b80f5cbd9cefb1efedd03e05fd400cc3dd03862"
+        print(f"Fetching data from URL: {url}")
+        # print(f"Headers: {self.headers}")
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                async with session.get(url, headers=self.headers) as response:
-                    if response.status == 404:
-                        raise ValueError(f"Symbol not found: {symbol}")
-                    response.raise_for_status()
-                    data = await response.json()
+            # async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            #     async with session.get(url, headers=self.headers) as response:
+            #         if response.status == 404:
+            #             raise ValueError(f"Symbol not found: {symbol}")
+            #         response.raise_for_status()
+            #         data = await response.json()
+
+            headers = {
+                'Content-Type': 'application/json'
+            }
+            requestResponse = requests.get(f"https://api.tiingo.com/tiingo/daily/{symbol}/prices?startDate=2024-05-12&token=0b80f5cbd9cefb1efedd03e05fd400cc3dd03862", headers=headers)
+            data = requestResponse.json()
 
             if not data:
                 raise ValueError(f"No data returned for {symbol}")
@@ -61,6 +70,8 @@ class MarketData:
             df["volume"] = df["adjVolume"].astype(int)
             df["symbol"] = symbol.upper()
 
+            with open("historical_data.csv", "a") as f:
+                df.to_csv(f, header=f.tell() == 0)
             return df
 
         except aiohttp.ClientError as e:

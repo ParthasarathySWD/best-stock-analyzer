@@ -1,7 +1,9 @@
 import mcp.types as types
 import mcp.server.stdio
 import asyncio
-
+import traceback
+import json
+import pandas as pd
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 
@@ -40,6 +42,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     "symbol": {
                         "type": "string",
                         "description": "Stock symbol (e.g., NVDA)",
+                        "default": "NVDA"
                     }
                 },
                 "required": ["symbol"],
@@ -54,6 +57,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     "symbol": {
                         "type": "string",
                         "description": "Stock symbol to analyze",
+                        "default": "NVDA",
                     },
                     "benchmark": {
                         "type": "string",
@@ -149,7 +153,7 @@ async def handle_call_tool(
     try:
         # Original analyze-stock tool
         if name == "analyze-stock":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
             if not symbol:
                 raise ValueError("Missing symbol")
 
@@ -161,32 +165,36 @@ async def handle_call_tool(
 
             # Get trend status
             trend = tech_analysis.check_trend_status(df)
-
+            # return [
+            #         types.TextContent(
+            #             type="text", text=f"\n<observation>\nTrend: {trend}\n</observation>\n"
+            #         )
+            #     ]
             analysis = f"""
 Technical Analysis for {symbol}:
 
 Trend Analysis:
-- Above 20 SMA: {"✅ " if trend["above_20sma"] else "❌ "}
-- Above 50 SMA: {"✅ " if trend["above_50sma"] else "❌ "}
-- Above 200 SMA: {"✅ " if trend["above_200sma"] else "❌ "}
-- 20/50 SMA Bullish Cross: {"✅ " if trend["20_50_bullish"] else "❌ "}
-- 50/200 SMA Bullish Cross: {"✅ " if trend["50_200_bullish"] else "❌ "}
+- Above 20 SMA: {"Yes " if trend["above_20sma"] else "No "}
+- Above 50 SMA: {"Yes " if trend["above_50sma"] else "No "}
+- Above 200 SMA: {"Yes " if trend["above_200sma"] else "No "}
+- 20/50 SMA Bullish Cross: {"Yes " if trend["20_50_bullish"] else "No "}
+- 50/200 SMA Bullish Cross: {"Yes " if trend["50_200_bullish"] else "No "}
 
 Momentum:
-- RSI (14): {trend["rsi"]:.2f}
-- MACD Bullish: {"✅ " if trend["macd_bullish"] else "❌ "}
+- RSI (14): {(trend["rsi"] or 0):.2f}
+- MACD Bullish: {"Yes " if trend["macd_bullish"] else "No "}
 
-Latest Price: ${df["close"].iloc[-1]:.2f}
-Average True Range (14): {df["atr"].iloc[-1]:.2f}
-Average Daily Range Percentage: {df["adrp"].iloc[-1]:.2f}%
-Average Volume (20D): {int(df["avg_20d_vol"].iloc[-1])}
+Latest Price: ${(df["close"].iloc[-1] or 0):.2f}
+Average True Range (14): {(df["atr"].iloc[-1] or 0):.2f}
+Average Daily Range Percentage: {(df["adrp"].iloc[-1] or 0):.2f}%
+Average Volume (20D): {int(df["avg_20d_vol"].iloc[-1]) if not (pd.isna(df["avg_20d_vol"].iloc[-1])) else 0}
 """
 
             return [types.TextContent(type="text", text=analysis)]
 
         # Relative Strength Analysis
         elif name == "relative-strength":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
             benchmark = arguments.get("benchmark", "SPY")
 
             if not symbol:
@@ -212,17 +220,17 @@ Relative Strength Analysis for {symbol} vs {benchmark}:
 
                     # Add classification
                     if score >= 80:
-                        rs_text += " (Strong Outperformance) ⭐⭐⭐"
+                        rs_text += " (Strong Outperformance) "
                     elif score >= 65:
-                        rs_text += " (Moderate Outperformance) ⭐⭐"
+                        rs_text += " (Moderate Outperformance) "
                     elif score >= 50:
-                        rs_text += " (Slight Outperformance) ⭐"
+                        rs_text += " (Slight Outperformance) "
                     elif score >= 35:
-                        rs_text += " (Slight Underperformance) ⚠️"
+                        rs_text += " (Slight Underperformance) "
                     elif score >= 20:
-                        rs_text += " (Moderate Underperformance) ⚠️⚠️"
+                        rs_text += " (Moderate Underperformance) "
                     else:
-                        rs_text += " (Strong Underperformance) ⚠️⚠️⚠️"
+                        rs_text += " (Strong Underperformance) "
 
                     rs_text += "\n"
 
@@ -256,7 +264,7 @@ Relative Strength Analysis for {symbol} vs {benchmark}:
 
         # Volume Profile Analysis
         elif name == "volume-profile":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
             lookback_days = arguments.get("lookback_days", 60)
 
             if not symbol:
@@ -270,7 +278,7 @@ Relative Strength Analysis for {symbol} vs {benchmark}:
 
             # Format the results
             profile_text = f"""
-Volume Profile Analysis for {symbol} (last {lookback_days} days):
+ Volume Profile Analysis for {symbol} (last {lookback_days} days):
 
 Point of Control (POC): ${profile["point_of_control"]} (Price level with highest volume)
 Value Area: ${profile["value_area_low"]} - ${profile["value_area_high"]} (70% of volume)
@@ -289,7 +297,7 @@ Volume by Price Level (High to Low):
 
         # Pattern Recognition
         elif name == "detect-patterns":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
 
             if not symbol:
                 raise ValueError("Missing symbol")
@@ -327,7 +335,7 @@ Volume by Price Level (High to Low):
 
         # Position Sizing
         elif name == "position-size":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
             price = arguments.get("price", 0)
             stop_price = arguments.get("stop_price")
             risk_amount = arguments.get("risk_amount")
@@ -353,12 +361,12 @@ Volume by Price Level (High to Low):
             position_text = f"""
 Position Sizing for {symbol} at ${price:.2f}:
 
-📊 Recommended Position:
+ Recommended Position:
 - {position_results["recommended_shares"]} shares (${position_results["position_cost"]:.2f})
 - Risk: ${position_results["dollar_risk"]:.2f} ({position_results["account_percent_risked"]:.2f}% of account)
 - Risk per share: ${position_results["risk_per_share"]:.2f}
 
-🎯 Potential Targets (R-Multiples):
+ Potential Targets (R-Multiples):
 - R1 (1:1): ${position_results["r_multiples"]["r1"]:.2f}
 - R2 (2:1): ${position_results["r_multiples"]["r2"]:.2f}
 - R3 (3:1): ${position_results["r_multiples"]["r3"]:.2f}
@@ -370,7 +378,7 @@ Remember what Ramada said: "Good trades don't just happen, they're the result of
 
         # Suggest Stop Levels
         elif name == "suggest-stops":
-            symbol = arguments.get("symbol")
+            symbol = arguments.get("symbol", "NVDA")
 
             if not symbol:
                 raise ValueError("Missing symbol")
@@ -423,10 +431,10 @@ Technical Levels:
     except Exception as e:
         return [
             types.TextContent(
-                type="text", text=f"\n<observation>\nError: {str(e)}\n</observation>\n"
+                type="text", text=f"\n<observation>\nError: {traceback.format_exc()} ## {str(e)}\n</observation>\n"
             )
         ]
-
+ 
 
 # Keep the main function as is
 async def main():
