@@ -1,8 +1,196 @@
 import pandas as pd
 import pandas_ta as ta
+import numpy as np
 
 from typing import Dict, Any, List
+from .utils import DataUtils
+class FundamentalAnalysis:
+    """Placeholder for fundamental analysis tools."""
+    
+    @staticmethod
+    def extract_key_financial_data(data: dict) -> Dict[str, Any]:
+        """
+        Fetch fundamental data for a given stock symbol.
+        
+        Args:
+            symbol (str): The stock symbol to fetch data for.
+        
+        Returns:
+            Dict[str, Any]: Fundamental data dictionary.
+        """
+        # Placeholder implementation
+        try:
+            # Get historical market data (e.g., last 5 years)
+            hist_data = data['hist_data']
+            if hist_data.empty:
+                current_price = None
+            else:
+                current_price = hist_data['Close'].iloc[-1]
+                
 
+            # Get income statement
+            income_statement = data['income_statement']
+            if income_statement.empty:
+                income_statement_t = None;
+            else:
+                income_statement_t = income_statement.T.sort_index()
+                
+
+            # Get balance sheet
+            balance_sheet = data['balance_sheet']
+            if balance_sheet.empty:
+                balance_sheet_t = None;
+            else:
+                balance_sheet_t = balance_sheet.T.sort_index()
+                
+
+            # Get cash flow statement
+            cash_flow = data['cash_flow']
+            if cash_flow.empty:
+                cash_flow_t = None;
+            else:
+                cash_flow_t = cash_flow.T.sort_index()
+                
+
+            # Get key statistics and company info
+            info = data['info']
+
+        except Exception as e:
+            return {
+                "status": "error", 
+                "error": f"Error during data collection: {e}"
+            }
+
+        try:
+
+            ratios = {}
+            statistics = {}
+            results = {}
+            if info:
+                display_info_keys = ['marketCap', 'trailingPE', 'forwardPE', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow', 'industry', 'sector', 'sharesOutstanding', 'trailingEps']
+                for k in display_info_keys:
+                    if k in info:
+                        statistics[k]= info[k]
+
+            # Ensure essential dataframes are not empty before proceeding
+            if not income_statement.empty and not balance_sheet.empty and current_price is not None:
+                # Extract relevant data (ensure column names match yfinance output)
+                revenue = income_statement_t.get('Total Revenue')
+                net_income = income_statement_t.get('Net Income')
+                total_assets = balance_sheet_t.get('Total Assets')
+                total_liabilities = balance_sheet_t.get('Total Liabilities')
+                shareholder_equity = balance_sheet_t.get('Total Stockholder Equity')
+                current_assets = balance_sheet_t.get('Total Current Assets')
+                current_liabilities = balance_sheet_t.get('Total Current Liabilities')
+
+                # Get EPS and shares outstanding from info
+                eps_trailing = info.get('trailingEps')
+                shares_outstanding = info.get('sharesOutstanding')
+
+
+                # --- Valuation Ratios ---
+                if eps_trailing and eps_trailing != 0 and current_price is not None:
+                    ratios['P/E Ratio (Trailing)'] = current_price / eps_trailing
+                else:
+                    ratios['P/E Ratio (Trailing)'] = np.nan
+
+                if shareholder_equity is not None and not shareholder_equity.empty and shares_outstanding and shares_outstanding != 0 and current_price is not None:
+                    book_value_per_share = shareholder_equity.iloc[-1] / shares_outstanding
+                    if book_value_per_share != 0:
+                        ratios['P/B Ratio'] = current_price / book_value_per_share
+                    else:
+                        ratios['P/B Ratio'] = np.nan
+                else:
+                    ratios['P/B Ratio'] = np.nan
+
+                if revenue is not None and not revenue.empty and current_price is not None and shares_outstanding and shares_outstanding != 0:
+                    sales_per_share = revenue.iloc[-1] / shares_outstanding
+                    if sales_per_share != 0:
+                        ratios['P/S Ratio'] = current_price / sales_per_share
+                    else:
+                        ratios['P/S Ratio'] = np.nan
+                else:
+                    ratios['P/S Ratio'] = np.nan
+
+                # --- Profitability Ratios ---
+                if net_income is not None and revenue is not None and not net_income.empty and not revenue.empty and revenue.iloc[-1] != 0:
+                    ratios['Net Profit Margin (%)'] = (net_income.iloc[-1] / revenue.iloc[-1]) * 100
+                else:
+                    ratios['Net Profit Margin (%)'] = np.nan
+
+                if net_income is not None and shareholder_equity is not None and not net_income.empty and not shareholder_equity.empty and shareholder_equity.iloc[-1] != 0:
+                    ratios['ROE (Return on Equity) (%)'] = (net_income.iloc[-1] / shareholder_equity.iloc[-1]) * 100
+                else:
+                    ratios['ROE (Return on Equity) (%)'] = np.nan
+
+                if net_income is not None and total_assets is not None and not net_income.empty and not total_assets.empty and total_assets.iloc[-1] != 0:
+                    ratios['ROA (Return on Assets) (%)'] = (net_income.iloc[-1] / total_assets.iloc[-1]) * 100
+                else:
+                    ratios['ROA (Return on Assets) (%)'] = np.nan
+
+                # --- Liquidity Ratios ---
+                if current_assets is not None and current_liabilities is not None and not current_assets.empty and not current_liabilities.empty and current_liabilities.iloc[-1] != 0:
+                    ratios['Current Ratio'] = current_assets.iloc[-1] / current_liabilities.iloc[-1]
+                else:
+                    ratios['Current Ratio'] = np.nan
+
+                # --- Solvency Ratios ---
+                if total_liabilities is not None and shareholder_equity is not None and not total_liabilities.empty and not shareholder_equity.empty and shareholder_equity.iloc[-1] != 0:
+                    ratios['Debt-to-Equity Ratio'] = total_liabilities.iloc[-1] / shareholder_equity.iloc[-1]
+                else:
+                    ratios['Debt-to-Equity Ratio'] = np.nan
+
+            else:
+                return {
+                    "status": "error",
+                    "error": "Insufficient data to calculate ratios. Please check if financial statements are available."
+                }
+
+
+            if income_statement_t is not None and 'Total Revenue' in income_statement_t.columns:
+                revenue_series = income_statement_t['Total Revenue'].dropna()
+                total_revenue = {
+                    date: DataUtils.convert_to_rupees(value)
+                    for date, value in revenue_series.items()
+                    if pd.notnull(value)
+                }
+                results['Total Revenue'] = total_revenue
+
+            if income_statement_t is not None and 'Net Income' in income_statement_t.columns:
+                net_income_series = income_statement_t['Net Income'].dropna()
+                net_income = {
+                    date: DataUtils.convert_to_rupees(value)
+                    for date, value in net_income_series.items()
+                    if pd.notnull(value)
+                }
+                results['Net Income'] = net_income
+
+            if shareholder_equity is not None and total_liabilities is not None and \
+            not shareholder_equity.empty and not total_liabilities.empty:
+                debt_to_equity_series = (total_liabilities / shareholder_equity).dropna()
+
+
+        except KeyError as e:
+            return {
+            "status": "error",
+            "error": f"Missing data for calculating ratio: {str(e)}"
+        }
+        except Exception as e:
+            # Catch any other unexpected errors during ratio calculation
+            return {
+            "status": "error",
+            "error": f"An unexpected error occurred during ratio calculation: {str(e)}"
+        }
+
+
+        # Return the collected data
+        return {
+            "status": "success",
+            "current_price": current_price,
+            "ratios": ratios,
+            "statistics": statistics,
+            "results": results
+        }
 
 class TechnicalAnalysis:
     """Technical analysis toolkit with improved performance and readability."""

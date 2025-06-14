@@ -13,6 +13,9 @@ dependencies = [
  "python-dotenv>=1.0.1",
  "setuptools>=75.8.0",
  "ta-lib>=0.6.0",
+ "yfinance"=="0.2.61",
+ "requests"=="2.32.3",
+ "ta-lib @ file:///C:/Python/MCP/best-stock-analyzer/ta_lib-0.6.0-cp311-cp311-win_amd64.whl",
 ]
 [[project.authors]]
 name = "Seth Hobson"

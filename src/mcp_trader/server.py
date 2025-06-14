@@ -1,3 +1,4 @@
+from datetime import datetime
 import mcp.types as types
 import mcp.server.stdio
 import asyncio
@@ -10,6 +11,7 @@ from mcp.server import NotificationOptions, Server
 # Add our new imports
 from .data import MarketData
 from .indicators import (
+    FundamentalAnalysis,
     TechnicalAnalysis,
     RelativeStrength,
     VolumeProfile,
@@ -20,6 +22,7 @@ from .indicators import (
 # Initialize our service instances
 market_data = MarketData()
 tech_analysis = TechnicalAnalysis()
+fund_analysis = FundamentalAnalysis()
 rs_analysis = RelativeStrength()
 volume_analysis = VolumeProfile()
 pattern_recognition = PatternRecognition()
@@ -36,6 +39,21 @@ async def handle_list_tools() -> list[types.Tool]:
         types.Tool(
             name="analyze-stock",
             description="Analyze a stock's technical setup",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock symbol (e.g., NVDA)",
+                        "default": "NVDA"
+                    }
+                },
+                "required": ["symbol"],
+            },
+        ),
+        types.Tool(
+            name="analyze-stock-fundamentals",
+            description="Analyze a stock's fundamental data",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -191,7 +209,69 @@ Average Volume (20D): {int(df["avg_20d_vol"].iloc[-1]) if not (pd.isna(df["avg_2
 """
 
             return [types.TextContent(type="text", text=analysis)]
+        # Original analyze-stock tool
+        elif name == "analyze-stock-fundamentals":
+            try:
+                symbol = arguments.get("symbol", "NVDA")
+                if not symbol:
+                    raise ValueError("Missing symbol")
+                # Fetch data
+                data = await market_data.get_fundamental_data(symbol)
+                if not data and "status" in data and data["status"] == "error":
+                    raise ValueError(f"Error fetching fundamental data: {data.get('error', 'Unknown error')}")
 
+                key_financial_data = fund_analysis.extract_key_financial_data(data)
+
+
+                analysis = f"""
+Fundamental Analysis for {symbol}:
+
+Key financial ratios:
+"""
+
+                for key, value in key_financial_data["ratios"].items():
+                    if isinstance(value, (int, float)) and pd.isna(value):
+                        continue  # Skip NaN values
+                    analysis += f"- {key}: {value}\n"
+
+                analysis += f"""
+Latest financials:
+"""
+
+                for key, value in key_financial_data["statistics"].items():
+                    if isinstance(value, (int, float)) and pd.isna(value):
+                        continue  # Skip NaN values
+                    analysis += f"- {key}: {value}\n"
+
+                analysis += f"""
+Total Revenue by Year:
+"""
+
+                # return [types.TextContent(type="text", text=analysis)]
+                for year, value in key_financial_data["results"]["Total Revenue"].items():
+                    if isinstance(value, (int, float, str)) and pd.isna(value):
+                        continue  # Skip NaN values
+                    # dt = datetime.strptime(year, "%Y-%m-%d %H:%M:%S")
+                    analysis += f"- {year}: {value}\n"
+
+                analysis += f"""
+Net Income (in billions):
+"""
+
+                for year, value in key_financial_data["results"]["Net Income"].items():
+                    if isinstance(value, (int, float, str)) and pd.isna(value):
+                        continue  # Skip NaN values
+                    # dt = datetime.strptime(year, "%Y-%m-%d %H:%M:%S")
+                    analysis += f"- {year}: {value}\n"
+                return [types.TextContent(type="text", text=analysis)]
+
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"\n<observation>\nError: {traceback.format_exc()} ## {str(e)}\n</observation>\n"
+                    )
+                ]
         # Relative Strength Analysis
         elif name == "relative-strength":
             symbol = arguments.get("symbol", "NVDA")
@@ -462,12 +542,14 @@ async def run_http_server():
     global \
         market_data, \
         tech_analysis, \
+        fund_analysis, \
         rs_analysis, \
         pattern_recognition, \
         volume_analysis, \
         risk_analysis
     market_data = MarketData()
     tech_analysis = TechnicalAnalysis()
+    fund_analysis = FundamentalAnalysis()
     rs_analysis = RelativeStrength()
     pattern_recognition = PatternRecognition()
     volume_analysis = VolumeProfile()

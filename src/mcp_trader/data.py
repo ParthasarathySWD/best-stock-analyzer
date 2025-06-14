@@ -40,18 +40,10 @@ class MarketData:
 
         try:
             # Determine the correct yfinance symbol
+            symbol = self.determine_yf_symbol(symbol)
             yf_symbol = symbol
-            if not (symbol.endswith('.NS') or symbol.endswith('.BO')):
-                # Try NSE first, fallback to BSE if NSE fails
-                df = yf.download(f"{symbol}.NS", start=start_date, end=end_date, auto_adjust=False)
-                if df.empty:
-                    df = yf.download(f"{symbol}.BO", start=start_date, end=end_date, auto_adjust=False)
-                    yf_symbol = f"{symbol}.BO"
-                else:
-                    yf_symbol = f"{symbol}.NS"
-            else:
-                df = yf.download(symbol, start=start_date, end=end_date, auto_adjust=False)
-                yf_symbol = symbol
+            df = yf.download(f"{symbol}", start=start_date, end=end_date, auto_adjust=False)
+            
 
             json_str = self.yfinance_to_tiingo_json(df, symbol)
             with open("yfinance_tiingo_format.json", "w") as f:
@@ -74,7 +66,41 @@ class MarketData:
             raise Exception(f"Unexpected error fetching data for {symbol}: {e}")
 
 
+    async def get_fundamental_data(self, symbol: str) -> dict:
+        """Fetch fundamental data for a given symbol using yfinance."""
+        try:
+            # Determine the correct yfinance symbol
+            symbol = self.determine_yf_symbol(symbol)
+            ticker = yf.Ticker(f"{symbol}")
 
+            hist_data = ticker.history(period="5y")
+
+            if hist_data.empty:
+                return {
+                    "status": "error",
+                    "error": f"No historical data found for {symbol}"
+                }
+            income_statement = ticker.financials
+            balance_sheet = ticker.balance_sheet
+            cash_flow = ticker.cashflow
+            info = ticker.info
+
+            return {
+                "status": "success",
+                "hist_data": hist_data,
+                "income_statement": income_statement,
+                "balance_sheet": balance_sheet,
+                "cash_flow": cash_flow,
+                "info": info
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to fetch fundamental data for {symbol}: {e}"
+            }
+        
+        
     def yfinance_to_tiingo_json(self, df: pd.DataFrame, symbol: str) -> str:
         df = df.reset_index()
 
@@ -118,7 +144,22 @@ class MarketData:
         ]
         records = df[columns].to_dict(orient="records")
         return json.dumps(records, ensure_ascii=False, indent=2)
-    
+
+    def determine_yf_symbol(self, symbol: str) -> str:
+        """
+        Determine the correct yfinance symbol based on the provided symbol.
+        This handles NSE and BSE symbols appropriately.
+        """
+        if not (symbol.endswith('.NS') or symbol.endswith('.BO')):
+            # Try NSE first, fallback to BSE if NSE fails
+            try:
+                yf.download(f"{symbol}.NS", period="1d")
+                return f"{symbol}.NS"
+            except Exception:
+                return f"{symbol}.BO"
+        return symbol    
+
+
 # md = MarketData()
 # end_date = datetime.now()
 # start_date = end_date - timedelta(days=365)
